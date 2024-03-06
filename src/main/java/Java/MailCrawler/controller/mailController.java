@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -32,7 +33,7 @@ public class mailController {
         }
     }
     @GetMapping("/getSpreadSheet")
-    public ResponseEntity<Map<String,String>> getLink(){
+    public ResponseEntity<Map<String,String>> getLink() throws IOException {
         String spreadSheetLink = mailService.generateSpreadSheetLink();
         Map<String,String> map = new HashMap<>();
         if(spreadSheetLink!=null && !spreadSheetLink.isEmpty()){

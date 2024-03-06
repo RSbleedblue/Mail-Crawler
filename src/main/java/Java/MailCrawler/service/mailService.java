@@ -2,6 +2,12 @@ package Java.MailCrawler.service;
 
 import Java.MailCrawler.model.mailModel;
 import Java.MailCrawler.repository.mailRepository;
+import Java.MailCrawler.util.SheetsServiceUtil;
+import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.model.Sheet;
+import com.google.api.services.sheets.v4.model.Spreadsheet;
+import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
+import com.google.api.services.sheets.v4.model.ValueRange;
 import org.apache.commons.mail.util.MimeMessageParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -10,13 +16,26 @@ import org.springframework.stereotype.Service;
 import javax.mail.*;
 import javax.mail.internet.MimeMessage;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 @Service
 public class mailService {
     @Autowired
     private mailRepository mailRepo;
-    private
+    private Sheets sheetsService;
+
+    public mailService() {
+        try {
+            this.sheetsService = SheetsServiceUtil.getSheetService();
+        } catch (IOException | GeneralSecurityException e) {
+            e.printStackTrace();
+            // Handle exception accordingly
+        }
+    }
     public boolean storeMail(){
         Properties props = new Properties();
         props.put("mail.imap.host", "imap.gmail.com");
@@ -57,8 +76,49 @@ public class mailService {
             return false;
         }
     }
-    public String generateSpreadSheetLink(){
+    public String generateSpreadSheetLink() throws IOException {
+        List<mailModel> mailData = mailRepo.findAll();
+        Spreadsheet spreadsheet = createSpreadsheet();
+        addDataToSpreadSheet(spreadsheet.getSpreadsheetId(),mailData);
+        String spreadsheetLink = "https://docs.google.com/spreadsheets/d/" + spreadsheet.getSpreadsheetId() + "/edit";
+        return spreadsheetLink;
+    }
+    private Spreadsheet createSpreadsheet() throws IOException {
+        Spreadsheet spreadsheet = new Spreadsheet().setProperties(
+                new SpreadsheetProperties().setTitle("Mail Data")
+        );
+        spreadsheet = sheetsService.spreadsheets().create(spreadsheet).execute();
+        return spreadsheet;
+    }
+    private void addDataToSpreadSheet(String spreadSheetID, List<mailModel> mailData) throws IOException {
+        List<List<Object>> values = prepareDataForSpreadsheet(mailData);
 
+        // Write data to the spreadsheet
+        ValueRange body = new ValueRange().setValues(values);
+        sheetsService.spreadsheets().values()
+                .update(spreadSheetID, "A1", body)
+                .setValueInputOption("RAW")
+                .execute();
+    }
+    private List<List<Object>> prepareDataForSpreadsheet(List<mailModel> mailData){
+        List<List<Object>> values = new ArrayList<>();
+
+        List<Object> columnNames = Arrays.asList("Mail Number", "Date", "From", "Project", "Tasks Done", "Tasks Todo", "Tasks onHold");
+        values.add(columnNames);
+
+        // Add mail data
+        for(mailModel mail: mailData){
+            List<Object> row = new ArrayList<>();
+            row.add(mail.getMailNumber());
+            row.add(mail.getDate());
+            row.add(mail.getFrom());
+            row.add(mail.getProject());
+            row.add(mail.getTask_Done());
+            row.add(mail.getTask_ToDo());
+            row.add(mail.getTask_pending());
+            values.add(row);
+        }
+        return values;
     }
     private String getContent(Message eachMessage) throws MessagingException, IOException {
         MimeMessageParser parser = new MimeMessageParser((MimeMessage) eachMessage);
