@@ -4,13 +4,11 @@ import Java.MailCrawler.model.mailModel;
 import Java.MailCrawler.repository.mailRepository;
 import Java.MailCrawler.util.SheetsServiceUtil;
 import com.google.api.services.sheets.v4.Sheets;
-import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
 import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import org.apache.commons.mail.util.MimeMessageParser;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import javax.mail.*;
@@ -53,8 +51,6 @@ public class mailService {
             int startMessage = Math.max(1, totalMessages - 10);
 
             Message[] messages = inbox.getMessages(startMessage,totalMessages);
-            System.out.println("Date "+ messages[0].getReceivedDate()+" Subject: "+messages[0].getSubject()+"This is Content: \n");
-
             for(Message eachMessage : messages){
                 if(eachMessage.getSubject()!=null && eachMessage.getSubject().startsWith("DSR")){
                     int mailNumber = eachMessage.getMessageNumber();
@@ -79,6 +75,7 @@ public class mailService {
     public String generateSpreadSheetLink() throws IOException {
         List<mailModel> mailData = mailRepo.findAll();
         Spreadsheet spreadsheet = createSpreadsheet();
+        spreadsheet.setSpreadsheetId("1Vy4rExSGZ8tyCGH6KqCvSuSBiybHI8NYhrkbKxvt_Go");
         addDataToSpreadSheet(spreadsheet.getSpreadsheetId(),mailData);
         String spreadsheetLink = "https://docs.google.com/spreadsheets/d/" + spreadsheet.getSpreadsheetId() + "/edit";
         return spreadsheetLink;
