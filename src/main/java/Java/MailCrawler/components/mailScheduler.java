@@ -14,12 +14,11 @@ public class mailScheduler {
     private mailScheduler(mailService mailService){
         this.mailService = mailService;
     }
-    @Scheduled(fixedDelay = 10000)
+//    @Scheduled(fixedDelay = 10000)
     public void checkMail() throws IOException {
         mailService.storeMail();
         String SpreadSheetLink = mailService.generateSpreadSheetLink();
         System.out.println("Database Updated!");
         System.out.println("SpreadSheet Link: "+ SpreadSheetLink);
-
     }
 }

@@ -15,10 +15,9 @@ import javax.mail.*;
 import javax.mail.internet.MimeMessage;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class mailService {
@@ -31,7 +30,6 @@ public class mailService {
             this.sheetsService = SheetsServiceUtil.getSheetService();
         } catch (IOException | GeneralSecurityException e) {
             e.printStackTrace();
-            // Handle exception accordingly
         }
     }
     public boolean storeMail(){
@@ -46,19 +44,19 @@ public class mailService {
             store.connect("imap.gmail.com", "rivansh63@gmail.com", "fesk cphm wfdc fpsr");
             Folder inbox = store.getFolder("INBOX");
             inbox.open(Folder.READ_ONLY);
-
             int totalMessages = inbox.getMessageCount();
             int startMessage = Math.max(1, totalMessages - 10);
 
             Message[] messages = inbox.getMessages(startMessage,totalMessages);
             for(Message eachMessage : messages){
-                if(eachMessage.getSubject()!=null && eachMessage.getSubject().startsWith("DSR")){
+                if(eachMessage.getSubject()!=null && eachMessage.getSubject().toLowerCase().contains("dsr")){
                     int mailNumber = eachMessage.getMessageNumber();
                     String date = eachMessage.getReceivedDate().toString();
                     String from = eachMessage.getFrom()[0].toString();
                     String content = getContent(eachMessage);
                     String[] trimContent = trimContent(content);
-                    createDB(mailNumber,date,from,trimContent[0],trimContent[1],trimContent[2],trimContent[3]);
+                    String project = getProjectName(eachMessage.getSubject());
+                    createDB(mailNumber,date,from,project,trimContent[0],trimContent[1],trimContent[2]);
                 }
             }
             inbox.close(false);
@@ -70,6 +68,58 @@ public class mailService {
         }
         catch (Exception e){
             return false;
+        }
+    }
+    public boolean userMail(String username, String password){
+        Properties props = new Properties();
+        props.put("mail.imap.host", "imap.gmail.com");
+        props.put("mail.imap.port", "993");
+        props.put("mail.imap.ssl.enable", "true");
+        props.put("mail.imap.ssl.trust", "imap.gmail.com");
+        try{
+            Session session = Session.getDefaultInstance(props);
+            Store store = session.getStore("imaps");
+            store.connect("imap.gmail.com", username, password);
+            Folder inbox = store.getFolder("INBOX");
+            inbox.open(Folder.READ_ONLY);
+            int totalMessages = inbox.getMessageCount();
+            int startMessage = Math.max(1, totalMessages - 10);
+
+            Message[] messages = inbox.getMessages(startMessage,totalMessages);
+            for(Message eachMessage : messages){
+                if(eachMessage.getSubject()!=null && eachMessage.getSubject().toLowerCase().contains("dsr")){
+                    int mailNumber = eachMessage.getMessageNumber();
+                    String date = eachMessage.getReceivedDate().toString();
+                    String from = eachMessage.getFrom()[0].toString();
+                    String content = getContent(eachMessage);
+                    String[] trimContent = trimContent(content);
+                    String project = getProjectName(eachMessage.getSubject());
+                    createDB(mailNumber,date,from,project,trimContent[0],trimContent[1],trimContent[2]);
+                }
+            }
+            inbox.close(false);
+            store.close();
+            return true;
+        }
+        catch (MessagingException e) {
+            throw new RuntimeException(e);
+        }
+        catch (Exception e){
+            return false;
+        }
+    }
+//    Project-Test:DSR
+    private String getProjectName(String str){
+        str = str.toLowerCase();
+        String patternString = "project-(.*)dsr";
+        Pattern pattern = Pattern.compile(patternString);
+        Matcher matcher = pattern.matcher(str);
+        if(matcher.find()){
+            String extractedText = matcher.group(1);
+            return extractedText.toUpperCase();
+        }
+        else{
+            return "NA";
         }
     }
     public String generateSpreadSheetLink() throws IOException {
@@ -89,8 +139,6 @@ public class mailService {
     }
     private void addDataToSpreadSheet(String spreadSheetID, List<mailModel> mailData) throws IOException {
         List<List<Object>> values = prepareDataForSpreadsheet(mailData);
-
-        // Write data to the spreadsheet
         ValueRange body = new ValueRange().setValues(values);
         sheetsService.spreadsheets().values()
                 .update(spreadSheetID, "A1", body)
@@ -99,11 +147,8 @@ public class mailService {
     }
     private List<List<Object>> prepareDataForSpreadsheet(List<mailModel> mailData){
         List<List<Object>> values = new ArrayList<>();
-
         List<Object> columnNames = Arrays.asList("Mail Number", "Date", "From", "Project", "Tasks Done", "Tasks Todo", "Tasks onHold");
         values.add(columnNames);
-
-        // Add mail data
         for(mailModel mail: mailData){
             List<Object> row = new ArrayList<>();
             row.add(mail.getMailNumber());
@@ -122,28 +167,46 @@ public class mailService {
         parser.parse();
         return parser.getPlainContent();
     }
-    private String[] trimContent(String data){
+    private String[] trimContent(String data) {
         String[] lines = data.split("\n");
-        String[] content = new String[4];
+        String[] content = new String[3];
+        boolean isTasksDoneSection = false;
+        boolean isTasksTodoSection = false;
+        boolean isTasksOnHoldSection = false;
 
         for (String line : lines) {
-            String[] parts = line.split(":");
-            if (parts.length == 2) {
-                String key = parts[0].trim();
-                String value = parts[1].trim();
-                switch (key) {
-                    case "Project":
-                        content[0] = value;
-                        break;
-                    case "Tasks Done":
-                        content[1] = value;
-                        break;
-                    case "Tasks Todo":
-                        content[2] = value;
-                        break;
-                    case "Tasks onHold":
-                        content[3] = value;
-                        break;
+            line = line.trim();
+            if (line.toLowerCase().startsWith("tasks done")) {
+                isTasksDoneSection = true;
+                continue;
+            } else if (line.toLowerCase().startsWith("tasks todo") || line.toLowerCase().startsWith("tasks to do")) {
+                isTasksTodoSection = true;
+                isTasksDoneSection = false;
+                continue;
+            } else if (line.toLowerCase().startsWith("tasks onhold") || line.toLowerCase().startsWith("tasks on hold")) {
+                isTasksOnHoldSection = true;
+                isTasksTodoSection = false;
+                isTasksDoneSection = false;
+                continue;
+            }
+
+            if (isTasksDoneSection) {
+                if (content[0] == null) {
+                    content[0] = line;
+                } else {
+                    content[0] += " " + line;
+                }
+            } else if (isTasksTodoSection) {
+                if (content[1] == null) {
+                    content[1] = line;
+                } else {
+                    content[1] += " " + line;
+                }
+            } else if (isTasksOnHoldSection) {
+                if (content[2] == null) {
+                    content[2] = line;
+                } else {
+                    content[2] += " " + line;
                 }
             }
         }
