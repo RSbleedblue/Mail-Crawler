@@ -41,7 +41,7 @@ public class mailService {
         try{
             Session session = Session.getDefaultInstance(props);
             Store store = session.getStore("imaps");
-            store.connect("imap.gmail.com", "rivansh63@gmail.com", "fesk cphm wfdc fpsr");
+            store.connect("imap.gmail.com", "place Mail", "Place Password");
             Folder inbox = store.getFolder("INBOX");
             inbox.open(Folder.READ_ONLY);
             int totalMessages = inbox.getMessageCount();
